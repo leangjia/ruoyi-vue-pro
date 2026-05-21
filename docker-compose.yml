@@ -1,0 +1,88 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: yudao-mysql
+    restart: always
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./sql/init-database.sql:/docker-entrypoint-initdb.d/init-database.sql
+      - ./sql/init-schema.sql:/docker-entrypoint-initdb.d/init-schema.sql
+      - ./sql/init-data.sql:/docker-entrypoint-initdb.d/init-data.sql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-ruoyi-vue-pro}
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ruoyi-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: yudao-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ruoyi-network
+
+  server:
+    build:
+      context: ./yudao-server
+      dockerfile: Dockerfile
+    container_name: yudao-server
+    restart: always
+    ports:
+      - "${SERVER_PORT:-48080}:48080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
+      MASTER_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-ruoyi-vue-pro}?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
+      MASTER_DATASOURCE_USERNAME: root
+      MASTER_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+      SLAVE_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-ruoyi-vue-pro}?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true&rewriteBatchedStatements=true
+      SLAVE_DATASOURCE_USERNAME: root
+      SLAVE_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+      REDIS_HOST: redis
+      YUDAO_IOT_MESSAGE_BUS_TYPE: local
+      YUDAO_IOT_TDENGINE_ENABLED: "false"
+    networks:
+      - ruoyi-network
+
+  admin:
+    build:
+      context: ./yudao-ui-admin
+      dockerfile: Dockerfile
+      args:
+        VUE_APP_BASE_API: ${VUE_APP_BASE_API:-/prod-api}
+    container_name: yudao-admin
+    restart: always
+    ports:
+      - "${ADMIN_PORT:-8080}:80"
+    depends_on:
+      - server
+    networks:
+      - ruoyi-network
+
+volumes:
+  mysql-data:
+  redis-data:
+
+networks:
+  ruoyi-network:
+    driver: bridge
