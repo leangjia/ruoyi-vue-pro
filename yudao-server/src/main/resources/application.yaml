@@ -33,7 +33,7 @@ server:
   servlet:
     encoding:
       enabled: true
-      charset: UTF-8 # 必须设置 UTF-8，避免 WebFlux 流式返回（AI 场景）会乱码问题
+      charset: UTF-8
       force: true
 
 --- #################### 接口文档配置 ####################
